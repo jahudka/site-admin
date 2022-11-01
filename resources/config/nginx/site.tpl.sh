@@ -7,17 +7,17 @@ server {
 EOT
 
 if [[ -n "${ssl}" ]]; then
-	cat << EOT
-	listen 443 ssl http2;
-	listen [::]:443 ssl http2;
+  cat << EOT
+  listen 443 ssl http2;
+  listen [::]:443 ssl http2;
 
-	ssl_certificate /etc/letsencrypt/live/${name}/fullchain.pem;
-	ssl_certificate_key /etc/letsencrypt/live/${name}/privkey.pem;
+  ssl_certificate /etc/letsencrypt/live/${name}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${name}/privkey.pem;
 EOT
 else
-	cat << EOT
-	listen 80;
-	listen [::]:80;
+  cat << EOT
+  listen 80;
+  listen [::]:80;
 EOT
 fi
 
@@ -31,7 +31,7 @@ cat << EOT
   access_log ${home_dir}/.log/nginx/access.log combined;
   error_log ${home_dir}/.log/nginx/error.log error;
 
-	location ~ ^/(robots.txt|humans.txt|favicon.ico)\$ {
+  location ~ ^/(robots.txt|humans.txt|favicon.ico)\$ {
     access_log off;
     log_not_found off;
     try_files \$uri =404;
@@ -46,30 +46,30 @@ EOT
 
 if [[ -n "${php}" ]]; then
   cat << EOT
-	location / {
-		try_files \$uri @app;
-	}
+  location / {
+    try_files \$uri \$uri/ @app;
+  }
 
-	location @app {
-		fastcgi_pass unix:/run/nginx/${name#www.}.sock;
-		include fastcgi_params;
-		fastcgi_index index.php;
-		fastcgi_param SCRIPT_NAME \$document_root/index.php;
-		fastcgi_param SCRIPT_FILENAME \$document_root/index.php;
-	}
+  location @app {
+    fastcgi_pass unix:/run/nginx/${name#www.}.sock;
+    include fastcgi_params;
+    fastcgi_index index.php;
+    fastcgi_param SCRIPT_NAME \$document_root/index.php;
+    fastcgi_param SCRIPT_FILENAME \$document_root/index.php;
+  }
 EOT
 elif [[ -n "${node}" ]]; then
   cat << EOT
-	location / {
-		try_files \$uri @app;
-	}
+  location / {
+    try_files \$uri @app;
+  }
 
-	location @app {
-		proxy_pass http://unix:/run/nginx/${name#www.}.sock:/;
-		proxy_http_version 1.1;
-		proxy_set_header Host \$host;
-		proxy_set_header X-Forwarded-For \$remote_addr;
-	}
+  location @app {
+    proxy_pass http://unix:/run/nginx/${name#www.}.sock:/;
+    proxy_http_version 1.1;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-For \$remote_addr;
+  }
 EOT
 fi
 
@@ -83,18 +83,18 @@ if [[ -z "${aliases}" ]]; then
 fi
 
 if [[ -n "${ssl}" ]]; then
-	cat << EOT
+  cat << EOT
 server {
-	listen 443 ssl http2;
-	listen [::]:443 ssl http2;
+  listen 443 ssl http2;
+  listen [::]:443 ssl http2;
 
-	ssl_certificate /etc/letsencrypt/live/${name}/fullchain.pem;
-	ssl_certificate_key /etc/letsencrypt/live/${name}/privkey.pem;
-	server_name ${aliases};
+  ssl_certificate /etc/letsencrypt/live/${name}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${name}/privkey.pem;
+  server_name ${aliases};
 
-	location / {
-		return 301 https://${name}\$request_uri;
-	}
+  location / {
+    return 301 https://${name}\$request_uri;
+  }
 }
 
 EOT
