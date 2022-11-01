@@ -196,6 +196,7 @@ chmod -R g-w,o-rwx "${home_dir}"
 chmod g+w "${home_dir}/.log"
 
 loginctl enable-linger "${user_name}"
+systemctl start "user@$( id -u "${user_name}" ).service"
 
 if [[ -n "${SSH_IMPORT:+x}" ]]; then
   sudo -u "${user_name}" ssh-import-id "${SSH_IMPORT}"
@@ -239,7 +240,10 @@ if [[ -n "${ssl}" ]]; then
 fi
 
 if [[ -n "${php}" ]]; then
-  sudo -u "${user_name}" -i systemctl --user enable --now fpm.service
+  sudo -u "${user_name}" -i << 'EOT'
+export XDG_RUNTIME_DIR="/run/user/$( id -u )"
+systemctl --user enable --now fpm.service
+EOT
 fi
 
 systemctl restart nginx
