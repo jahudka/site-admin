@@ -44,12 +44,13 @@ aliases=""
 names=()
 php=""
 node=""
-ssl=""
 user_name=""
 home_dir=""
+ssl=""
+yes=""
 
 set +e
-temp=$( getopt --options 'p::n::u:h:s' --longoptions 'php::,node::,user:,home:,ssl' --name "${ADM_CMD} create" -- "$@" )
+temp=$( getopt --options 'p::n::u:h:sy' --longoptions 'php::,node::,user:,home:,ssl,yes' --name "${ADM_CMD} create" -- "$@" )
 
 if [[ "$?" -ne 0 ]]; then
   print_usage
@@ -69,10 +70,6 @@ while [[ "$#" -gt 0 ]]; do
       node="${2:-18}"
       shift 2
       ;;
-    '-s'|'--ssl')
-      ssl=1
-      shift
-      ;;
     '-u'|'--user')
       user_name="${2}"
       shift 2
@@ -80,6 +77,14 @@ while [[ "$#" -gt 0 ]]; do
     '-h'|'--home')
       home_dir="${2}"
       shift 2
+      ;;
+    '-s'|'--ssl')
+      ssl=1
+      shift
+      ;;
+    '-y'|'--yes')
+      yes=1
+      shift
       ;;
     '--')
       shift
@@ -146,11 +151,13 @@ echo " - SSL: ${ssl:-0}"
 echo " - User name: ${user_name}"
 echo " - Home directory: ${home_dir}"
 
-read -rp "Proceed? [Y/n] "
+if [[ -z "${yes}" ]]; then
+  read -rp "Proceed? [Y/n] "
 
-if [[ -n "${REPLY}" && ! "${REPLY}" =~ [yY] ]]; then
-  echo "Aborted."
-  exit
+  if [[ -n "${REPLY}" && ! "${REPLY}" =~ [yY] ]]; then
+    echo "Aborted."
+    exit
+  fi
 fi
 
 # usage: install_resource <name> <dst>
@@ -247,7 +254,7 @@ if [[ -n "${ssl}" ]]; then
   done
 
   certbot \
-    --certonly \
+    certonly \
     --agree-tos \
     --non-interactive \
     --authenticator ${CERTBOT_AUTHENTICATOR} \
