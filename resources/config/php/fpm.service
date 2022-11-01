@@ -1,0 +1,14 @@
+[Unit]
+Description=PHP 8.0 FPM pool %u
+Documentation=man:php-fpm8.0(8)
+
+[Service]
+Type=notify
+RuntimeDirectory=php
+ExecStart=%h/.bin/php-fpm --nodaemonize --pid ${RUNTIME_DIRECTORY}/fpm.pid --prefix %h --fpm-config %h/.config/php/fpm.conf
+ExecReload=/bin/kill -USR2 $MAINPID
+Restart=always
+WorkingDirectory=%h
+
+[Install]
+WantedBy=default.target

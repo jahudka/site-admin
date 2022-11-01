@@ -1,0 +1,247 @@
+#!/usr/bin/env bash
+
+set -eu
+
+function print_usage () {
+  echo "Usage: ${ADM_CMD} create [-p|--php[=<version>]] [-n|--node[=<version>]] [-s|-ssl] <name> [alias...]"
+  exit 1
+}
+
+# usage: resolve_version <variable> <friendly name> <version> <directory> <pattern>
+# will search <directory> for files or directories starting with <pattern>;
+# if none are found, outputs an error message using <friendly name> and <version>;
+# if more than one are found allows the user to select one interactively;
+# sets the <variable> to the result
+function resolve_version () {
+  local var_name="$1"
+  local friendly_name="$2"
+  local version="$3"
+  local dir="$4"
+  local pattern="${5:-$version}"
+  local matches=()
+  readarray -t matches < <( find "${dir}" -maxdepth 2 -regex "${dir}/${pattern}[^/]*" -exec basename "{}" \; )
+
+  if [[ "${#matches[@]}" -eq 0 ]]; then
+    echo "Invalid ${friendly_name} version '${version}'"
+    exit 1
+  elif [[ "${#matches[@]}" -eq 1 ]]; then
+    export "${var_name}=${matches[0]}"
+  else
+    echo "Please clarify ${friendly_name} version:"
+
+    select match in "${matches[@]}"; do
+      if [[ -n "${match}" ]]; then
+        export "${var_name}=${match}"
+        echo ""
+        break
+      fi
+    done
+  fi
+}
+
+name=""
+aliases=""
+names=()
+php=""
+node=""
+ssl=""
+
+set +e
+temp=$( getopt --options 'p::n::s' --longoptions 'php::,node::,ssl' --name "${ADM_CMD} create" -- "$@" )
+
+if [[ "$?" -ne 0 ]]; then
+  print_usage
+fi
+
+set -e
+eval set -- "$temp"
+unset temp
+
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    '-p'|'--php')
+      php="${2:-8}"
+      shift 2
+      ;;
+    '-n'|'--node')
+      node="${2:-16}"
+      shift 2
+      ;;
+    '-s'|'--ssl')
+      ssl=1
+      shift
+      ;;
+    '--')
+      shift
+      break
+      ;;
+  esac
+done
+
+if [[ "$#" -lt 1 ]]; then
+  print_usage
+fi
+
+name="$1"
+names+=("$1")
+shift
+
+while [[ "$#" -gt 0 ]]; do
+  aliases="${aliases}${aliases:+ }$1"
+  names+=("$1")
+  shift
+done
+
+if [[ -n "${php}" ]]; then
+  resolve_version php PHP "${php}" /etc/php
+fi
+
+if [[ -n "${node}" ]]; then
+  resolve_version node Node "${node}" /opt/node "v?${node}"
+fi
+
+user_name="cst-$( sed -re 's/^www\.|\.[^.]+$//g' -e ':a' -e 's/([^.]+)\.([^.]+)$/\2-\1/' -e 'ta' <<< "${name}" )"
+home_dir="/srv/http/${name#www.}"
+
+if [[ -n "$( getent passwd "${user_name}" )" ]]; then
+  echo "User ${user_name} already exists"
+  exit 1
+fi
+
+if [[ -x "${home_dir}" ]]; then
+  echo "Home directory ${home_dir} already exists"
+  exit 1
+fi
+
+if [[ -n "${ssl}" && -n "${CERTBOT_AUTHENTICATOR:+x}" ]]; then
+  echo "Error: Certbot authenticator not configured, please edit ${ADM_ROOT}/config.env"
+  exit 1
+fi
+
+echo "Summary:"
+echo " - Name: ${name}"
+
+if [[ -n "${aliases}" ]]; then
+  echo " - Aliases: ${aliases}"
+fi
+
+echo " - PHP: ${php:-none}"
+echo " - Node: ${node:-none}"
+echo " - SSL: ${ssl:-0}"
+echo " - User name: ${user_name}"
+echo " - Home directory: ${home_dir}"
+
+read -rp "Proceed? [Y/n] "
+
+if [[ -n "${REPLY}" && ! "${REPLY}" =~ [yY] ]]; then
+  echo "Aborted."
+  exit
+fi
+
+# usage: install_resource <name> <dst>
+# if <dst> is relative, installs to $home_dir and sets $user_name as owner,
+# otherwise owner is root
+function install_resource () {
+  local rsc_path="${ADM_RESOURCES}/$1"
+  local dst_path="$2"
+  local dst_user="root"
+
+  if [[ ! "$dst_path" =~ ^/ ]]; then
+    dst_path="${home_dir}/$2"
+    dst_user="${user_name}"
+  fi
+
+  sudo -u "${dst_user}" mkdir -pm 0750 "$( dirname "${dst_path}" )"
+
+  if [[ -f "${rsc_path}" ]]; then
+    if [[ "${rsc_path}" =~ \.tpl\.sh$ ]]; then
+      export name aliases php node ssl user_name home_dir
+      "${rsc_path}" > "${dst_path}"
+      export -n name aliases php node ssl user_name home_dir
+    else
+      cat "${rsc_path}" > "${dst_path}"
+    fi
+
+    chown "${dst_user}:${dst_user}" "${dst_path}"
+    chmod u=rw,g=r,o= "${dst_path}"
+  else
+    rsync -a \
+      --chown "${dst_user}:${dst_user}" \
+      --chmod "Du=rwx,Dg=rx,Do=,Fu=rw,Fg=r,Fo=" \
+      "${rsc_path}" \
+      "${dst_path}"
+  fi
+}
+
+useradd \
+  --system \
+  --create-home \
+  --home-dir "${home_dir}" \
+  --skel "${ADM_RESOURCES}/skel" \
+  --shell /bin/bash \
+  --user-group \
+  --key SYS_UID_MIN=801 \
+  --key SYS_UID_MAX=899 \
+  --key SYS_GID_MIN=801 \
+  --key SYS_GID_MAX=899 \
+  --key UMASK=027 \
+  --comment "${name},,,,UMASK=027" \
+  "${user_name}"
+
+adduser "${user_name}" www-data
+adduser www-data "${user_name}"
+
+find "${home_dir}" -type f -name '.keep' -delete
+chmod -R g-w,o-rwx "${home_dir}"
+chmod g+w "${home_dir}/.log"
+
+loginctl enable-linger "${user_name}"
+
+if [[ -n "${SSH_IMPORT:+x}" ]]; then
+  sudo -u "${user_name}" ssh-import-id "${SSH_IMPORT}"
+fi
+
+if [[ -n "${php}" ]]; then
+  sudo -u "${user_name}" ln -s "$( which "php${php}" )" "${home_dir}/.bin/php"
+  sudo -u "${user_name}" ln -s "$( which "php-fpm${php}" )" "${home_dir}/.bin/php-fpm"
+
+  sudo -u "${user_name}" mkdir -p "${home_dir}/.log/php"
+  install_resource config/php/fpm.service .config/systemd/user/fpm.service
+  install_resource config/php/fpm.tpl.sh .config/php/fpm.conf
+fi
+
+if [[ -n "${node}" ]]; then
+  sudo -u "${user_name}" ln -s "/opt/node/${node}/bin/corepack" "${home_dir}/.bin/corepack"
+  sudo -u "${user_name}" ln -s "/opt/node/${node}/bin/node" "${home_dir}/.bin/node"
+  sudo -u "${user_name}" ln -s "/opt/node/${node}/bin/npm" "${home_dir}/.bin/npm"
+  sudo -u "${user_name}" ln -s "/opt/node/${node}/bin/npx" "${home_dir}/.bin/npx"
+fi
+
+sudo -u "${user_name}" mkdir -p "${home_dir}/.log/nginx"
+
+install_resource config/nginx/site.tpl.sh "/etc/nginx/sites-available/${name#www.}.conf"
+ln -s "../sites-available/${name#www.}.conf" "/etc/nginx/sites-enabled/${name#www.}"
+
+if [[ -n "${ssl}" ]]; then
+  certbot_domains=()
+
+  for n in "${names[@]}"; do
+    certbot_domains+=('-d' "${n}")
+  done
+
+  certbot \
+    --certonly \
+    --agree-tos \
+    --non-interactive \
+    --authenticator ${CERTBOT_AUTHENTICATOR} \
+    --post-hook '/bin/systemctl reload nginx' \
+    "${certbot_domains[@]}"
+fi
+
+if [[ -n "${php}" ]]; then
+  sudo -u "${user_name}" -i systemctl --user enable --now fpm.service
+fi
+
+systemctl restart nginx
+
+echo "All finished."

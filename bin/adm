@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+set -eu
+
+base_dir="$( dirname "$( dirname "$( realpath "$0" )" )" )"
+
+if [[ "$#" -lt 1 ]]; then
+  echo "Usage: $0 <command>"
+  exit 1
+fi
+
+command="${base_dir}/commands/$1"
+
+if [[ ! -x "${command}" ]]; then
+  echo "Unknown command: $1"
+  exit 1
+fi
+
+shift
+
+set -a
+source "${base_dir}/config.env"
+ADM_CMD="$0"
+ADM_ROOT="${base_dir}"
+ADM_RESOURCES="${base_dir}/resources"
+set +a
+
+"${command}" "$@"
