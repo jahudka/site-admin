@@ -248,4 +248,10 @@ fi
 
 systemctl restart nginx
 
+echo "Testing site..."
+curl -sSf \
+  --resolve "${name}:80:127.0.0.1" \
+  --resolve "${name}:443:127.0.0.1" \
+  "http${ssl:+s}://${name}"
+
 echo "All finished."
