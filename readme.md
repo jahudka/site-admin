@@ -14,9 +14,9 @@ self-hosted websites. It supports Nginx, PHP-FPM and NodeJS, as well as Let's En
 
 ```shell
 git clone --depth 1 git@github.com:jahudka/site-admin.git /opt/site-admin
-cd /opt/site-admin
-rm -rf .git
-ln -s $(pwd)/bin/adm /usr/local/bin/adm
+rm -rf /opt/site-admin/.git
+mv /opt/site-admin/config.env.example /opt/site-admin/config.env
+ln -s /opt/site-admin/bin/adm /usr/local/bin/adm
 ```
 
 ## Commands
