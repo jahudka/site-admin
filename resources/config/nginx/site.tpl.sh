@@ -61,7 +61,7 @@ EOT
 elif [[ -n "${node}" ]]; then
   cat << EOT
   location / {
-    try_files \$uri @app;
+    try_files \$uri \$uri/ @app;
   }
 
   location @app {
