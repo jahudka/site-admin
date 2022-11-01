@@ -128,7 +128,7 @@ if [[ -x "${home_dir}" ]]; then
   exit 1
 fi
 
-if [[ -n "${ssl}" && -n "${CERTBOT_AUTHENTICATOR:+x}" ]]; then
+if [[ -n "${ssl}" && -z "${CERTBOT_AUTHENTICATOR:+x}" ]]; then
   echo "Error: Certbot authenticator not configured, please edit ${ADM_ROOT}/config.env"
   exit 1
 fi
