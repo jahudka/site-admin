@@ -45,9 +45,11 @@ names=()
 php=""
 node=""
 ssl=""
+user_name=""
+home_dir=""
 
 set +e
-temp=$( getopt --options 'p::n::s' --longoptions 'php::,node::,ssl' --name "${ADM_CMD} create" -- "$@" )
+temp=$( getopt --options 'p::n::u:h:s' --longoptions 'php::,node::,user:,home:,ssl' --name "${ADM_CMD} create" -- "$@" )
 
 if [[ "$?" -ne 0 ]]; then
   print_usage
@@ -70,6 +72,14 @@ while [[ "$#" -gt 0 ]]; do
     '-s'|'--ssl')
       ssl=1
       shift
+      ;;
+    '-u'|'--user')
+      user_name="${2}"
+      shift 2
+      ;;
+    '-h'|'--home')
+      home_dir="${2}"
+      shift 2
       ;;
     '--')
       shift
@@ -100,8 +110,13 @@ if [[ -n "${node}" ]]; then
   resolve_version node Node "${node}" /opt/node "v?${node}"
 fi
 
-user_name="cst-$( sed -re 's/^www\.|\.[^.]+$//g' -e ':a' -e 's/([^.]+)\.([^.]+)$/\2-\1/' -e 'ta' <<< "${name}" )"
-home_dir="/srv/http/${name#www.}"
+if [[ -z "${user_name}" ]]; then
+  user_name="cst-$( sed -re 's/^www\.|\.[^.]+$//g' -e ':a' -e 's/([^.]+)\.([^.]+)$/\2-\1/' -e 'ta' <<< "${name}" )"
+fi
+
+if [[ -z "${home_dir}" ]]; then
+  home_dir="/srv/http/${name#www.}"
+fi
 
 if [[ -n "$( getent passwd "${user_name}" )" ]]; then
   echo "User ${user_name} already exists"
