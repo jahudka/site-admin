@@ -5,7 +5,7 @@ Documentation=man:php-fpm8.0(8)
 [Service]
 Type=notify
 RuntimeDirectory=php
-ExecStart=%h/.bin/php-fpm --nodaemonize --pid ${RUNTIME_DIRECTORY}/fpm.pid --prefix %h --fpm-config %h/.config/php/fpm.conf
+ExecStart=%h/.bin/php-fpm --nodaemonize --pid ${RUNTIME_DIRECTORY}/fpm.pid --prefix %h --fpm-config %h/.config/php/fpm.conf -c %h/.config/php/fpm.ini
 ExecReload=/bin/kill -USR2 $MAINPID
 Restart=always
 WorkingDirectory=%h

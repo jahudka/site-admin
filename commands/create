@@ -209,6 +209,7 @@ if [[ -n "${php}" ]]; then
   sudo -u "${user_name}" mkdir -p "${home_dir}/.log/php"
   install_resource config/php/fpm.service .config/systemd/user/fpm.service
   install_resource config/php/fpm.tpl.sh .config/php/fpm.conf
+  install_resource config/php/fpm.ini .config/php/fpm.ini
 fi
 
 if [[ -n "${node}" ]]; then
