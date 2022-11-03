@@ -78,11 +78,7 @@ cat << EOT
 
 EOT
 
-if [[ -z "${aliases}" ]]; then
-  exit
-fi
-
-if [[ -n "${ssl}" ]]; then
+if [[ -n "${aliases}" && -n "${ssl}" ]]; then
   cat << EOT
 server {
   listen 443 ssl http2;
@@ -100,7 +96,8 @@ server {
 EOT
 fi
 
-cat << EOT
+if [[ -n "${aliases}" || -n "${ssl}" ]]; then
+	cat << EOT
 server {
   listen 80;
   listen [::]:80;
@@ -113,3 +110,4 @@ server {
 }
 
 EOT
+fi
