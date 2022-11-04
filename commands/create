@@ -258,12 +258,21 @@ if [[ -n "${ssl}" ]]; then
     "${certbot_domains[@]}"
 fi
 
+install_resource config/logrotate/logrotate.tpl.sh .config/logrotate.conf
+install_resource config/logrotate/logrotate.service .config/systemd/user/logrotate.service
+install_resource config/logrotate/logrotate.timer .config/systemd/user/logrotate.timer
+
+services="logrotate.timer"
+
 if [[ -n "${php}" ]]; then
-  sudo -u "${user_name}" -i << 'EOT'
-export XDG_RUNTIME_DIR="/run/user/$( id -u )"
-systemctl --user enable --now fpm.service
-EOT
+  services="${services} fpm.service"
 fi
+
+sudo -u "${user_name}" -i << EOT
+export XDG_RUNTIME_DIR="/run/user/$( id -u "${user_name}" )"
+systemctl --user daemon-reload
+systemctl --user enable --now ${services}
+EOT
 
 systemctl restart nginx
 
