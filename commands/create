@@ -112,7 +112,7 @@ if [[ -n "${node}" ]]; then
 fi
 
 if [[ -z "${user_name}" ]]; then
-  user_name="cst-$( sed -re 's/^www\.|\.[^.]+$//g' -e ':a' -e 's/([^.]+)\.([^.]+)$/\2-\1/' -e 'ta' <<< "${name}" )"
+  user_name="cst-$( sed -Ee 's/^www\.|\.[^.]+$//g' -e ':a' -e 's/([^.]+)\.([^.]+)$/\2-\1/' -e 'ta' <<< "${name}" )"
 fi
 
 if [[ -z "${home_dir}" ]]; then
@@ -236,7 +236,7 @@ if [[ -n "${node}" ]]; then
   sudo -u "${user_name}" ln -s "/opt/node/${node}/bin/npx" "${home_dir}/.bin/npx"
 fi
 
-sudo -u "${user_name}" << EOT
+sudo -u "${user_name}" -i << EOT
 mkdir -p "${home_dir}/.log/nginx"
 ln -s "/var/log/nginx/access.${name#www.}.log" "${home_dir}/.log/nginx/access"
 ln -s "/var/log/nginx/error.${name#www.}.log" "${home_dir}/.log/nginx/error"
