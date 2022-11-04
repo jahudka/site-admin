@@ -211,7 +211,6 @@ adduser www-data "${user_name}"
 
 find "${home_dir}" -type f -name '.keep' -delete
 chmod -R g-w,o-rwx "${home_dir}"
-chmod g+w "${home_dir}/.log"
 
 loginctl enable-linger "${user_name}"
 systemctl start "user@$( id -u "${user_name}" ).service"
@@ -237,7 +236,11 @@ if [[ -n "${node}" ]]; then
   sudo -u "${user_name}" ln -s "/opt/node/${node}/bin/npx" "${home_dir}/.bin/npx"
 fi
 
-sudo -u "${user_name}" mkdir -p "${home_dir}/.log/nginx"
+sudo -u "${user_name}" << EOT
+mkdir -p "${home_dir}/.log/nginx"
+ln -s "/var/log/nginx/access.${name#www.}.log" "${home_dir}/.log/nginx/access"
+ln -s "/var/log/nginx/error.${name#www.}.log" "${home_dir}/.log/nginx/error"
+EOT
 
 install_resource config/nginx/site.tpl.sh "/etc/nginx/sites-available/${name#www.}.conf"
 ln -s "../sites-available/${name#www.}.conf" "/etc/nginx/sites-enabled/${name#www.}"
