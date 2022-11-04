@@ -28,8 +28,8 @@ cat << EOT
   index ${php:+index.php }index.htm index.html;
   charset utf8;
 
-  access_log ${home_dir}/.log/nginx/access.log combined;
-  error_log ${home_dir}/.log/nginx/error.log error;
+  access_log /var/log/nginx/access.${name#www.}.log combined;
+  error_log /var/log/nginx/error.${name#www.}.log error;
 
   location ~ ^/(robots.txt|humans.txt|favicon.ico)\$ {
     access_log off;
