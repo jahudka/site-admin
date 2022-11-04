@@ -49,25 +49,21 @@ home_dir=""
 ssl=""
 yes=""
 
-set +e
-temp=$( getopt --options 'p::n::u:h:sy' --longoptions 'php::,node::,user:,home:,ssl,yes' --name "${ADM_CMD} create" -- "$@" )
-
-if [[ "$?" -ne 0 ]]; then
+if ! temp=$( getopt --options 'p::n::u:h:sy' --longoptions 'php::,node::,user:,home:,ssl,yes' --name "${ADM_CMD} create" -- "$@" ); then
   print_usage
 fi
 
-set -e
 eval set -- "$temp"
 unset temp
 
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     '-p'|'--php')
-      php="${2:-8}"
+      php="${2:-$DEFAULT_PHP_VERSION}"
       shift 2
       ;;
     '-n'|'--node')
-      node="${2:-18}"
+      node="${2:-$DEFAULT_NODE_VERSION}"
       shift 2
       ;;
     '-u'|'--user')
