@@ -4,4 +4,4 @@ Documentation=man:logrotate(8) man:logrotate.conf(5)
 
 [Service]
 Type=oneshot
-ExecStart=/usr/sbin/logrotate %h/.config/logrotate.conf
+ExecStart=/usr/sbin/logrotate --state %h/.cache/logrotate.state %h/.config/logrotate.conf
