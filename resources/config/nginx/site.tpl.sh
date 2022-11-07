@@ -47,7 +47,7 @@ EOT
 if [[ -n "${php}" ]]; then
   cat << EOT
   location / {
-    try_files \$uri \$uri/ @app;
+    try_files \$uri @app;
   }
 
   location @app {
@@ -61,7 +61,7 @@ EOT
 elif [[ -n "${node}" ]]; then
   cat << EOT
   location / {
-    try_files \$uri \$uri/ @app;
+    try_files \$uri @app;
   }
 
   location @app {
