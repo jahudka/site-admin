@@ -25,7 +25,7 @@ cat << EOT
 
   server_name ${name};
   root ${home_dir}/current/public;
-  index ${php:+index.php }index.htm index.html;
+  index index.html index.htm;
   charset utf8;
 
   access_log /var/log/nginx/access.${name#www.}.log combined;
@@ -47,7 +47,7 @@ EOT
 if [[ -n "${php}" ]]; then
   cat << EOT
   location / {
-    try_files \$uri @app;
+    try_files \$uri \$uri/ @app;
   }
 
   location @app {
@@ -61,7 +61,7 @@ EOT
 elif [[ -n "${node}" ]]; then
   cat << EOT
   location / {
-    try_files \$uri @app;
+    try_files \$uri \$uri/ @app;
   }
 
   location @app {
