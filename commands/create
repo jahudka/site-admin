@@ -3,7 +3,38 @@
 set -eu
 
 function print_usage () {
-  echo "Usage: ${ADM_CMD} create [-p|--php[=<version>]] [-n|--node[=<version>]] [-s|-ssl] <name> [alias...]"
+  cat << EOT
+Usage: ${ADM_CMD} create [options] <name> [alias...]
+Options:
+ --app, -a                Switch to Application mode. See below for what that means.
+ --user=<user>, -u <user> Override default user name.
+ --home=<home>, -h <home> Override default home directory.
+ --php[=#], -p[#]         Enable PHP at version '#' (default: ${DEFAULT_PHP_VERSION}).
+ --node[=#], -n[#]        Enable NodeJS at version '#' (default: ${DEFAULT_NODE_VERSION}).
+ --ssl, -s                Obtain Let's Encrypt certificate for <name> and all aliases.
+ --yes, -y                Do not ask for confirmation.
+
+The utility operates in one of two modes:
+
+Site:
+ - UID and GID range is 2000-2999
+ - default user and group name is the prefix 'cst-', followed by <name> with leading
+   'www.' stripped and remaining domain names in reverse order separated by '-'
+ - user is added to the 'www-data' group and the 'www-data' user is added to the user's group
+ - default home directory is '/srv/http/<name>' (with leading 'www.' stripped from <name>)
+ - a Nginx vhost config is generated and enabled
+
+App:
+ - UID and GID are generated in the usual range for system users
+ - default user and group name is <name>
+ - default home directory is '/opt/<name>'
+ - aliases are converted to symlinks:
+    - 'foo': /usr/local/bin/foo -> /opt/<name>/.bin/foo
+    - 'foo=bar': /usr/local/bin/foo -> /opt/<name>/.bin/bar
+ - Let's Encrypt certificates are never generated
+
+
+EOT
   exit 1
 }
 
@@ -41,7 +72,8 @@ function resolve_version () {
 
 name=""
 aliases=""
-names=()
+aliases_arr=()
+app=""
 php=""
 node=""
 user_name=""
@@ -49,7 +81,7 @@ home_dir=""
 ssl=""
 yes=""
 
-if ! temp=$( getopt --options 'p::n::u:h:sy' --longoptions 'php::,node::,user:,home:,ssl,yes' --name "${ADM_CMD} create" -- "$@" ); then
+if ! temp=$( getopt --options 'p::n::u:h:say' --longoptions 'php::,node::,user:,home:,ssl,app,yes' --name "${ADM_CMD} create" -- "$@" ); then
   print_usage
 fi
 
@@ -78,6 +110,10 @@ while [[ "$#" -gt 0 ]]; do
       ssl=1
       shift
       ;;
+    '-a'|'--app')
+      app=1
+      shift
+      ;;
     '-y'|'--yes')
       yes=1
       shift
@@ -94,12 +130,11 @@ if [[ "$#" -lt 1 ]]; then
 fi
 
 name="$1"
-names+=("$1")
 shift
 
 while [[ "$#" -gt 0 ]]; do
   aliases="${aliases}${aliases:+ }$1"
-  names+=("$1")
+  aliases_arr+=("$1")
   shift
 done
 
@@ -112,11 +147,19 @@ if [[ -n "${node}" ]]; then
 fi
 
 if [[ -z "${user_name}" ]]; then
-  user_name="cst-$( sed -Ee 's/^www\.|\.[^.]+$//g' -e ':a' -e 's/([^.]+)\.([^.]+)$/\2-\1/' -e 'ta' <<< "${name}" )"
+  if [[ -n "${app}" ]]; then
+    user_name="${name}"
+  else
+    user_name="cst-$( sed -Ee 's/^www\.|\.[^.]+$//g' -e ':a' -e 's/([^.]+)\.([^.]+)$/\2-\1/' -e 'ta' <<< "${name}" )"
+  fi
 fi
 
 if [[ -z "${home_dir}" ]]; then
-  home_dir="/srv/http/${name#www.}"
+  if [[ -n "${app}" ]]; then
+    home_dir="/opt/${name}"
+  else
+    home_dir="/srv/http/${name#www.}"
+  fi
 fi
 
 if [[ -n "$( getent passwd "${user_name}" )" ]]; then
@@ -129,9 +172,23 @@ if [[ -x "${home_dir}" ]]; then
   exit 1
 fi
 
-if [[ -n "${ssl}" && -z "${CERTBOT_AUTHENTICATOR:+x}" ]]; then
+if [[ -n "${app}" && -n "${ssl}" ]]; then
+  echo "Error: cannot create Let's Encrypt certificates in App mode"
+  exit 1
+elif [[ -n "${ssl}" && -z "${CERTBOT_AUTHENTICATOR:+x}" ]]; then
   echo "Error: Certbot authenticator not configured, please edit ${ADM_ROOT}/config.env"
   exit 1
+fi
+
+if [[ -n "${app}" ]]; then
+  for alias in "${aliases_arr[@]}"; do
+    alias="$( cut -d= -f1 <<< "${alias}" )"
+
+    if [[ -e "/usr/local/bin/${alias}" ]]; then
+      echo "Invalid alias '${alias}': file '/usr/local/bin/${alias}' exists"
+      exit 1
+    fi
+  done
 fi
 
 echo "Summary:"
@@ -181,15 +238,26 @@ function install_resource () {
     fi
 
     chown "${dst_user}:${dst_user}" "${dst_path}"
-    chmod u=rw,g=r,o= "${dst_path}"
+    chmod g-w,o-rwx "${dst_path}"
   else
     rsync -a \
       --chown "${dst_user}:${dst_user}" \
-      --chmod "Du=rwx,Dg=rx,Do=,Fu=rw,Fg=r,Fo=" \
+      --chmod "g-w,o-rwx" \
       "${rsc_path}" \
       "${dst_path}"
   fi
 }
+
+args=()
+
+if [[ -z "${app}" ]]; then
+  args+=(
+    --key SYS_UID_MIN=2000
+    --key SYS_UID_MAX=2999
+    --key SYS_GID_MIN=2000
+    --key SYS_GID_MAX=2999
+  )
+fi
 
 useradd \
   --system \
@@ -198,16 +266,15 @@ useradd \
   --skel "${ADM_RESOURCES}/skel" \
   --shell /bin/bash \
   --user-group \
-  --key SYS_UID_MIN=801 \
-  --key SYS_UID_MAX=899 \
-  --key SYS_GID_MIN=801 \
-  --key SYS_GID_MAX=899 \
+  "${args[@]}" \
   --key UMASK=027 \
   --comment "${name},,,,UMASK=027" \
   "${user_name}"
 
-adduser "${user_name}" www-data
-adduser www-data "${user_name}"
+if [[ -z "${app}" ]]; then
+  adduser "${user_name}" www-data
+  adduser www-data "${user_name}"
+fi
 
 find "${home_dir}" -type f -name '.keep' -delete
 chmod -R g-w,o-rwx "${home_dir}"
@@ -221,12 +288,15 @@ fi
 
 if [[ -n "${php}" ]]; then
   sudo -u "${user_name}" ln -s "$( which "php${php}" )" "${home_dir}/.bin/php"
-  sudo -u "${user_name}" ln -s "$( which "php-fpm${php}" )" "${home_dir}/.bin/php-fpm"
+
+  if [[ -z "${app}" ]]; then
+    sudo -u "${user_name}" ln -s "$( which "php-fpm${php}" )" "${home_dir}/.bin/php-fpm"
+    install_resource config/php/fpm.service .config/systemd/user/fpm.service
+    install_resource config/php/fpm.tpl.sh .config/php/fpm.conf
+    install_resource config/php/fpm.ini .config/php/fpm.ini
+  fi
 
   sudo -u "${user_name}" mkdir -p "${home_dir}/.log/php"
-  install_resource config/php/fpm.service .config/systemd/user/fpm.service
-  install_resource config/php/fpm.tpl.sh .config/php/fpm.conf
-  install_resource config/php/fpm.ini .config/php/fpm.ini
 fi
 
 if [[ -n "${node}" ]]; then
@@ -236,29 +306,48 @@ if [[ -n "${node}" ]]; then
   sudo -u "${user_name}" ln -s "/opt/node/${node}/bin/npx" "${home_dir}/.bin/npx"
 fi
 
-sudo -u "${user_name}" -i << EOT
+if [[ -n "${app}" ]]; then
+  sudo -u "${user_name}" -i << EOT
+mkdir -p "${home_dir}/releases/000-default/bin"
+ln -s "${home_dir}/releases/000-default" "${home_dir}/current"
+EOT
+
+  for alias in "${aliases_arr[@]}"; do
+    binary="$( cut -d= -f2 <<< "${alias}" )"
+    alias="$( cut -d= -f1 <<< "${alias}" )"
+    install_resource stub.sh "current/bin/${binary}"
+    sudo -u "${user_name}" ln -s "${home_dir}/current/bin/${binary}" "${home_dir}/.bin/${binary}"
+    ln -s "${home_dir}/.bin/${binary}" "/usr/local/bin/${alias}"
+  done
+else
+  sudo -u "${user_name}" -i << EOT
+mkdir -p "${home_dir}/releases/000-default/public"
+echo 'It works!' > "${home_dir}/releases/000-default/public/index.html"
+ln -s "${home_dir}/releases/000-default" "${home_dir}/current"
+
 mkdir -p "${home_dir}/.log/nginx"
 ln -s "/var/log/nginx/access.${name#www.}.log" "${home_dir}/.log/nginx/access"
 ln -s "/var/log/nginx/error.${name#www.}.log" "${home_dir}/.log/nginx/error"
 EOT
 
-install_resource config/nginx/site.tpl.sh "/etc/nginx/sites-available/${name#www.}.conf"
-ln -s "../sites-available/${name#www.}.conf" "/etc/nginx/sites-enabled/${name#www.}"
+  install_resource config/nginx/site.tpl.sh "/etc/nginx/sites-available/${name#www.}.conf"
+  ln -s "../sites-available/${name#www.}.conf" "/etc/nginx/sites-enabled/${name#www.}"
 
-if [[ -n "${ssl}" ]]; then
-  certbot_domains=()
+  if [[ -n "${ssl}" ]]; then
+    certbot_domains=('-d' "${name}")
 
-  for n in "${names[@]}"; do
-    certbot_domains+=('-d' "${n}")
-  done
+    for alias in "${aliases_arr[@]}"; do
+      certbot_domains+=('-d' "${alias}")
+    done
 
-  certbot \
-    certonly \
-    --agree-tos \
-    --non-interactive \
-    --authenticator ${CERTBOT_AUTHENTICATOR} \
-    --post-hook '/bin/systemctl reload nginx' \
-    "${certbot_domains[@]}"
+    certbot \
+      certonly \
+      --agree-tos \
+      --non-interactive \
+      --authenticator "${CERTBOT_AUTHENTICATOR}" \
+      --post-hook '/bin/systemctl reload nginx' \
+      "${certbot_domains[@]}"
+  fi
 fi
 
 install_resource config/logrotate/logrotate.tpl.sh .config/logrotate.conf
@@ -267,7 +356,7 @@ install_resource config/logrotate/logrotate.timer .config/systemd/user/logrotate
 
 services="logrotate.timer"
 
-if [[ -n "${php}" ]]; then
+if [[ -z "${app}" && -n "${php}" ]]; then
   services="${services} fpm.service"
 fi
 
@@ -277,12 +366,14 @@ systemctl --user daemon-reload
 systemctl --user enable --now ${services}
 EOT
 
-systemctl restart nginx
+if [[ -z "${app}" ]]; then
+  systemctl restart nginx
 
-echo "Testing site..."
-curl -sSf \
-  --resolve "${name}:80:127.0.0.1" \
-  --resolve "${name}:443:127.0.0.1" \
-  "http${ssl:+s}://${name}/"
+  echo "Testing site..."
+  curl -sSf \
+    --resolve "${name}:80:127.0.0.1" \
+    --resolve "${name}:443:127.0.0.1" \
+    "http${ssl:+s}://${name}/"
+fi
 
 echo "All finished."
