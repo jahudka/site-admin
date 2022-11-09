@@ -19,7 +19,11 @@ fi
 shift
 
 set -a
-source "${base_dir}/config.env"
+
+if [[ -f "${base_dir}/config.env" ]]; then
+  source "${base_dir}/config.env"
+fi
+
 ADM="$0"
 ADM_ROOT="${base_dir}"
 ADM_RESOURCES="${base_dir}/resources"

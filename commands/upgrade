@@ -2,8 +2,5 @@
 
 set -eu
 
-git clone --depth 1 git@github.com:jahudka/site-admin.git "${ADM_ROOT}-next"
-rm -rf "${ADM_ROOT}-next/.git"
-mv "${ADM_ROOT}/config.env" "${ADM_ROOT}-next/config.env"
-rm -rf "${ADM_ROOT}"
-mv "${ADM_ROOT}-next" "${ADM_ROOT}"
+curl -sSf https://github.com/jahudka/site-admin/raw/main/install.sh \
+  | bash -s "${ADM_ROOT}"

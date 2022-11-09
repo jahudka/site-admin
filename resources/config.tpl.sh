@@ -2,8 +2,8 @@
 
 # Default PHP and Node versions.
 # Used when PHP or Node is requested without specifying a version.
-#DEFAULT_PHP_VERSION=8
-#DEFAULT_NODE_VERSION=18
+DEFAULT_PHP_VERSION=${php}
+DEFAULT_NODE_VERSION=${node}
 
 # Import SSH keys to application users. Uses `ssh-import-keys`.
 # Optional.
