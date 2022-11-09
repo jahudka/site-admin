@@ -20,7 +20,7 @@ shift
 
 set -a
 source "${base_dir}/config.env"
-ADM_CMD="$0"
+ADM="$0"
 ADM_ROOT="${base_dir}"
 ADM_RESOURCES="${base_dir}/resources"
 set +a

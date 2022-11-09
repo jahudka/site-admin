@@ -4,7 +4,7 @@ set -eu
 
 function print_usage () {
   cat << EOT
-Usage: ${ADM_CMD} create [options] <name> [alias...]
+Usage: ${ADM} create [options] <name> [alias...]
 Options:
  --app, -a                Switch to Application mode. See below for what that means.
  --user=<user>, -u <user> Override default user name.
@@ -38,38 +38,6 @@ EOT
   exit 1
 }
 
-# usage: resolve_version <variable> <friendly name> <version> <directory> <pattern>
-# will search <directory> for files or directories starting with <pattern>;
-# if none are found, outputs an error message using <friendly name> and <version>;
-# if more than one are found allows the user to select one interactively;
-# sets the <variable> to the result
-function resolve_version () {
-  local var_name="$1"
-  local friendly_name="$2"
-  local version="$3"
-  local dir="$4"
-  local pattern="${5:-$version}"
-  local matches=()
-  readarray -t matches < <( find "${dir}" -maxdepth 2 -regex "${dir}/${pattern}[^/]*" -exec basename "{}" \; )
-
-  if [[ "${#matches[@]}" -eq 0 ]]; then
-    echo "Invalid ${friendly_name} version '${version}'"
-    exit 1
-  elif [[ "${#matches[@]}" -eq 1 ]]; then
-    export "${var_name}=${matches[0]}"
-  else
-    echo "Please clarify ${friendly_name} version:"
-
-    select match in "${matches[@]}"; do
-      if [[ -n "${match}" ]]; then
-        export "${var_name}=${match}"
-        echo ""
-        break
-      fi
-    done
-  fi
-}
-
 name=""
 aliases=""
 aliases_arr=()
@@ -81,7 +49,7 @@ home_dir=""
 ssl=""
 yes=""
 
-if ! temp=$( getopt --options 'p::n::u:h:say' --longoptions 'php::,node::,user:,home:,ssl,app,yes' --name "${ADM_CMD} create" -- "$@" ); then
+if ! temp=$( getopt --options 'p::n::u:h:say' --longoptions 'php::,node::,user:,home:,ssl,app,yes' --name "${ADM} create" -- "$@" ); then
   print_usage
 fi
 
@@ -139,11 +107,11 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 if [[ -n "${php}" ]]; then
-  resolve_version php PHP "${php}" /etc/php
+  php="$( "${ADM}" resolve /etc/php "${php}" )"
 fi
 
 if [[ -n "${node}" ]]; then
-  resolve_version node Node "${node}" /opt/node "v?${node}"
+  node="$( "${ADM}" resolve /opt/node "${node}" )"
 fi
 
 if [[ -z "${user_name}" ]]; then
@@ -213,41 +181,6 @@ if [[ -z "${yes}" ]]; then
   fi
 fi
 
-# usage: install_resource <name> <dst>
-# if <dst> is relative, installs to $home_dir and sets $user_name as owner,
-# otherwise owner is root
-function install_resource () {
-  local rsc_path="${ADM_RESOURCES}/$1"
-  local dst_path="$2"
-  local dst_user="root"
-
-  if [[ ! "$dst_path" =~ ^/ ]]; then
-    dst_path="${home_dir}/$2"
-    dst_user="${user_name}"
-  fi
-
-  sudo -u "${dst_user}" mkdir -pm 0750 "$( dirname "${dst_path}" )"
-
-  if [[ -f "${rsc_path}" ]]; then
-    if [[ "${rsc_path}" =~ \.tpl\.sh$ ]]; then
-      export name aliases php node ssl user_name home_dir
-      "${rsc_path}" > "${dst_path}"
-      export -n name aliases php node ssl user_name home_dir
-    else
-      cat "${rsc_path}" > "${dst_path}"
-    fi
-
-    chown "${dst_user}:${dst_user}" "${dst_path}"
-    chmod g-w,o-rwx "${dst_path}"
-  else
-    rsync -a \
-      --chown "${dst_user}:${dst_user}" \
-      --chmod "g-w,o-rwx" \
-      "${rsc_path}" \
-      "${dst_path}"
-  fi
-}
-
 args=()
 
 if [[ -z "${app}" ]]; then
@@ -287,50 +220,50 @@ if [[ -n "${SSH_IMPORT:+x}" ]]; then
 fi
 
 if [[ -n "${php}" ]]; then
-  sudo -u "${user_name}" ln -s "$( which "php${php}" )" "${home_dir}/.bin/php"
+  ${ADM} install -u "${user_name}" -h "${home_dir}" -s "$( which "php${php}" )" .bin/php
 
   if [[ -z "${app}" ]]; then
-    sudo -u "${user_name}" ln -s "$( which "php-fpm${php}" )" "${home_dir}/.bin/php-fpm"
-    install_resource config/php/fpm.service .config/systemd/user/fpm.service
-    install_resource config/php/fpm.tpl.sh .config/php/fpm.conf
-    install_resource config/php/fpm.ini .config/php/fpm.ini
+    ${ADM} install -u "${user_name}" -h "${home_dir}" -s "$( which "php-fpm${php}" )" .bin/php-fpm
+    ${ADM} install -u "${user_name}" -h "${home_dir}" config/php/fpm.service .config/systemd/user/fpm.service
+    ${ADM} install -u "${user_name}" -h "${home_dir}" config/php/fpm.ini .config/php/fpm.ini
+    ${ADM} install -u "${user_name}" -h "${home_dir}" config/php/fpm.tpl.sh .config/php/fpm.conf -v name="${name}"
   fi
 
   sudo -u "${user_name}" mkdir -p "${home_dir}/.log/php"
 fi
 
 if [[ -n "${node}" ]]; then
-  sudo -u "${user_name}" ln -s "/opt/node/${node}/bin/corepack" "${home_dir}/.bin/corepack"
-  sudo -u "${user_name}" ln -s "/opt/node/${node}/bin/node" "${home_dir}/.bin/node"
-  sudo -u "${user_name}" ln -s "/opt/node/${node}/bin/npm" "${home_dir}/.bin/npm"
-  sudo -u "${user_name}" ln -s "/opt/node/${node}/bin/npx" "${home_dir}/.bin/npx"
+  ${ADM} install -u "${user_name}" -h "${home_dir}" -s "/opt/node/${node}/bin/corepack" .bin/corepack
+  ${ADM} install -u "${user_name}" -h "${home_dir}" -s "/opt/node/${node}/bin/node" .bin/node
+  ${ADM} install -u "${user_name}" -h "${home_dir}" -s "/opt/node/${node}/bin/npm" .bin/npm
+  ${ADM} install -u "${user_name}" -h "${home_dir}" -s "/opt/node/${node}/bin/npx" .bin/npx
 fi
 
+"${ADM}" scaffold "${home_dir}"
+
 if [[ -n "${app}" ]]; then
-  sudo -u "${user_name}" -i << EOT
-mkdir -p "${home_dir}/releases/000-default/bin"
-ln -s "${home_dir}/releases/000-default" "${home_dir}/current"
-EOT
+  sudo -u "${user_name}" mkdir "${home_dir}/current/bin"
 
   for alias in "${aliases_arr[@]}"; do
     binary="$( cut -d= -f2 <<< "${alias}" )"
     alias="$( cut -d= -f1 <<< "${alias}" )"
-    install_resource stub.sh "current/bin/${binary}"
+    ${ADM} install -u "${user_name}" -h "${home_dir}" stub.sh "current/bin/${binary}"
     sudo -u "${user_name}" ln -s "${home_dir}/current/bin/${binary}" "${home_dir}/.bin/${binary}"
     ln -s "${home_dir}/.bin/${binary}" "/usr/local/bin/${alias}"
   done
 else
   sudo -u "${user_name}" -i << EOT
-mkdir -p "${home_dir}/releases/000-default/public"
-echo 'It works!' > "${home_dir}/releases/000-default/public/index.html"
-ln -s "${home_dir}/releases/000-default" "${home_dir}/current"
+mkdir "${home_dir}/current/public"
+echo 'It works!' > "${home_dir}/current/public/index.html"
 
 mkdir -p "${home_dir}/.log/nginx"
 ln -s "/var/log/nginx/access.${name#www.}.log" "${home_dir}/.log/nginx/access"
 ln -s "/var/log/nginx/error.${name#www.}.log" "${home_dir}/.log/nginx/error"
 EOT
 
-  install_resource config/nginx/site.tpl.sh "/etc/nginx/sites-available/${name#www.}.conf"
+  ${ADM} install config/nginx/site.tpl.sh "/etc/nginx/sites-available/${name#www.}.conf" \
+    -v name="${name}" -v home_dir="${home_dir}" -v aliases="${aliases}" \
+    -v php="${php}" -v node="${node}" -v ssl="${ssl}"
   ln -s "../sites-available/${name#www.}.conf" "/etc/nginx/sites-enabled/${name#www.}"
 
   if [[ -n "${ssl}" ]]; then
@@ -350,9 +283,9 @@ EOT
   fi
 fi
 
-install_resource config/logrotate/logrotate.tpl.sh .config/logrotate.conf
-install_resource config/logrotate/logrotate.service .config/systemd/user/logrotate.service
-install_resource config/logrotate/logrotate.timer .config/systemd/user/logrotate.timer
+${ADM} install -u "${user_name}" -h "${home_dir}" config/logrotate/logrotate.tpl.sh .config/logrotate.conf -v home_dir="${home_dir}"
+${ADM} install -u "${user_name}" -h "${home_dir}" config/logrotate/logrotate.service .config/systemd/user/logrotate.service
+${ADM} install -u "${user_name}" -h "${home_dir}" config/logrotate/logrotate.timer .config/systemd/user/logrotate.timer
 
 services="logrotate.timer"
 

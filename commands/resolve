@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+set -eu
+
+function print_usage () {
+  cat << EOT
+Usage: ${ADM} resolve <program> [version]
+Arguments:
+  program             The path to search for program versions, e.g. "/etc/php"
+  version             Major version requirement, e.g. "8"
+
+Resolves the latest available version of <program>, optionally
+matching <version> if specified.
+EOT
+  exit 1
+}
+
+function ere () {
+  sed -Ee 's#([-.$*+?^~\\()\[\{}|]|])#\\\1#g' <<< "${1}"
+}
+
+base="${1}"
+prefix=""
+version="${2:-}"
+
+if [[ ! -d "${base}" ]]; then
+  prefix="${base##*/}"
+  base="${base%/*}"
+
+  if [[ ! -d "${base}" ]]; then
+    echo "Base directory '${base}' doesn't exist"
+    exit 1
+  fi
+fi
+
+prefix="$( ere "${prefix}" )"
+version="$( ere "${version}" )"
+
+readarray -t versions < <(
+  find "${base}" -mindepth 1 -maxdepth 1 -regextype egrep \
+    -regex ".+/${prefix:-v?}${version:-[0-9]+}(\.[0-9]+)*" \
+    | sed -Ee "s~^.+/${prefix:-v?}~~g" \
+    | sort -Vr
+)
+
+if [[ "${#versions[@]}" -lt 1 ]]; then
+  echo "No matching version found" >&2
+  exit 1
+fi
+
+echo "${versions[0]}"

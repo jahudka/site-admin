@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+
+set -eu
+
+function print_usage () {
+  cat << EOT
+Usage: ${ADM} scaffold [options] <base>
+Arguments:
+  base                      Base directory to scaffold
+Options:
+  --user=<user>, -u <user>  Change ownership to <user>:<user>. By default the owner
+                            of <base> is assumed.
+  --allow-others, -o        By default, all files installed by this command will be
+                            'chmod g-w,o-rwx'. With this option it will be 'g-w,o-w'
+                            instead. Useful for executables which should be accessible
+                            by all users.
+
+Creates a conventional versioned app structure:
+ - <base>/releases              Directory which contains releases.
+ - <base>/releases/000-initial  Initial empty release.
+ - <base>/current               Symlink to releases/000-initial.
+ - <base>/shared                Directory for shared data.
+EOT
+  exit 1
+}
+
+user=""
+perms="g-w,o-rwx"
+
+if ! temp=$( getopt --options 'u:o' --longoptions 'user:,allow-others' --name "${ADM} scaffold" -- "$@" ); then
+  print_usage
+fi
+
+eval set -- "$temp"
+unset temp
+
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    '-u'|'--user')
+      user="${2}"
+      shift 2
+      ;;
+    '-o'|'--allow-others')
+      perms="g-w,o-w"
+      shift
+      ;;
+    '--')
+      shift
+      break
+      ;;
+  esac
+done
+
+if [[ "$#" != "1" ]]; then
+  print_usage
+fi
+
+base="${1}"
+current_user="$( id -un )"
+
+if [[ ! -d "${base}" ]]; then
+  echo "Base directory '${base}' doesn't exist"
+  exit 1
+fi
+
+if [[ -z "${user}" ]]; then
+  user="$( stat -c '%U' "${base}" )"
+
+  if [[ "${current_user}" != "root" ]]; then
+    if [[ "${user}" != "${current_user}" ]]; then
+      echo "Cannot scaffold directory owned by '${user}' as non-root"
+      exit 1
+    else
+      user=""
+    fi
+  fi
+elif [[ "${current_user}" != "root" ]]; then
+  echo "Only root can use the --user / -u option"
+  exit 1
+fi
+
+mkdir -m "${perms}" \
+  "${base}/releases" \
+  "${base}/releases/000-initial" \
+  "${base}/shared"
+
+ln -s "${base}/releases/000-initial" "${base}/current"
+
+if [[ -n "${user}" ]]; then
+  chown -h "${user}:${user}" \
+    "${base}/releases" \
+    "${base}/releases/000-initial" \
+    "${base}/shared" \
+    "${base}/current"
+fi

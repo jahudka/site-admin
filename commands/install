@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+
+set -eu
+
+function print_usage () {
+  cat << EOT
+Usage: ${ADM} install [options] <resource> [destination]
+Arguments:
+  resource                  Path to the resource to be installed.
+  destination               Path to the installation destination. If omitted, defaults
+                            to the same relative path as <resource>.
+Options:
+  --user=<user>, -u <user>  Change ownership to <user>:<user>.
+  --home=<home>, -h <home>  By default relative <destination> will be resolved
+                            relative to the target user's home directory; use this
+                            option to change that.
+  --symlink, -s             Symlink resource to destination instead of copying.
+  --allow-others, -o        By default, all files installed by this command will be
+                            'chmod g-w,o-rwx'. With this option it will be 'g-w,o-w'
+                            instead. Useful for executables which should be accessible
+                            by all users.
+  --var <var>, -v <var>     One or more variables to export for template scripts.
+
+
+EOT
+  exit 1
+}
+
+current_user="$( id -un )"
+user=""
+home=""
+symlink=""
+vars=()
+perms="g-w,o-rwx"
+
+if ! temp=$( getopt --options 'u:h:v:so' --longoptions 'user:,home:,var:,symlink,allow-others' --name "${ADM} install" -- "$@" ); then
+  print_usage
+fi
+
+eval set -- "$temp"
+unset temp
+
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    '-u'|'--user')
+      user="${2}"
+      shift 2
+      ;;
+    '-h'|'--home')
+      home="${2}"
+      shift 2
+      ;;
+    '-v'|'--var')
+      vars+=("${2}")
+      shift 2
+      ;;
+    '-s'|'--symlink')
+      symlink=1
+      shift
+      ;;
+    '-o'|'--allow-others')
+      perms="g-w,o-w"
+      shift
+      ;;
+    '--')
+      shift
+      break
+      ;;
+  esac
+done
+
+if [[ "$#" -lt 1 || "$#" -gt 2 ]]; then
+  print_usage
+fi
+
+resource="${1}"
+destination="${2:-$1}"
+
+if [[ -z "${user}" ]]; then
+  user="${current_user}"
+elif [[ "${current_user}" != "root" ]]; then
+  echo "Only root can use the --user / -u option"
+  exit 1
+fi
+
+if [[ -z "${home}" ]]; then
+  home="$( getent passwd "${user}" | cut -d: -f6 )"
+fi
+
+if [[ ! "${resource}" =~ ^/ ]]; then
+  resource="${ADM_RESOURCES}/${resource}"
+fi
+
+if [[ ! "${destination}" =~ ^/ ]]; then
+  destination="${home}/${destination}"
+fi
+
+function mkdirp () {
+  if [[ -e "${1}" ]]; then
+    return 0
+  fi
+
+  mkdirp "$( dirname "${1}" )"
+  mkdir -m "${perms}" "${1}"
+  chown "${user}:${user}" "${1}"
+}
+
+mkdirp "$( dirname "${destination}" )"
+
+if [[ -n "${symlink}" ]]; then
+  ln -s "${resource}" "${destination}"
+  chown -h "${user}:${user}" "${destination}"
+elif [[ -f "${resource}" ]]; then
+  if [[ -x "${resource}" && "${resource}" =~ \.tpl\.sh$ ]]; then
+    if [[ "${#vars[@]}" -gt "0" ]]; then
+      export "${vars[@]}"
+    fi
+
+    "${resource}" > "${destination}"
+  else
+    cat "${resource}" > "${destination}"
+  fi
+
+  chown "${user}:${user}" "${destination}"
+  chmod "${perms}" "${destination}"
+else
+  rsync -a \
+    --chown "${user}:${user}" \
+    --chmod "${perms}" \
+    "${resource}" \
+    "${destination}"
+fi
