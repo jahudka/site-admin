@@ -118,7 +118,7 @@ elif [[ -f "${resource}" ]]; then
 
     "${resource}" > "${destination}"
   else
-    cat "${resource}" > "${destination}"
+    cp -f --preserve=mode "${resource}" "${destination}"
   fi
 
   chown "${user}:${user}" "${destination}"
