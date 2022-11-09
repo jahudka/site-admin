@@ -2,5 +2,9 @@
 
 set -eu
 
+if [[ "${ADM_ROOT}" =~ .+/releases/[^/]+ ]]; then
+  install_dir="$( dirname "$( dirname "${ADM_ROOT}" )" )"
+fi
+
 curl -sSfL https://github.com/jahudka/site-admin/raw/main/install.sh \
-  | bash -s "${ADM_ROOT}"
+  | bash -s "${install_dir:-}"
