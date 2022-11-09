@@ -8,7 +8,7 @@ cat << EOT
 DEFAULT_PHP_VERSION=${php}
 DEFAULT_NODE_VERSION=${node}
 
-# Import SSH keys to application users. Uses `ssh-import-keys`.
+# Import SSH keys to application users. Uses 'ssh-import-keys'.
 # Optional.
 #SSH_IMPORT=gh:username
 
