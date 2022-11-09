@@ -40,7 +40,10 @@ fi
 mv site-admin-main "${install_dir}/releases/${version}"
 ln -s "${install_dir}/shared/config.env" "${install_dir}/releases/${version}/config.env"
 ln -s "${install_dir}/releases/${version}" "${install_dir}/current.new"
-mv -f "${install_dir}/current.new" "${install_dir}/current"
+mv -fT "${install_dir}/current.new" "${install_dir}/current"
+
+ln -s "${install_dir}/current/bin/adm" /usr/local/bin/adm.new
+mv -fT /usr/local/bin/adm.new /usr/local/bin/adm
 
 find "${install_dir}/releases" -mindepth 1 -maxdepth 1 -type d -regex '.+/[0-9][^/]+' \
 	| sort -n \

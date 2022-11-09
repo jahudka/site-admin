@@ -13,15 +13,16 @@ self-hosted websites. It supports Nginx, PHP-FPM and NodeJS, as well as Let's En
 ## Installation
 
 ```shell
-git clone --depth 1 git@github.com:jahudka/site-admin.git /opt/site-admin
-rm -rf /opt/site-admin/.git
-mv /opt/site-admin/config.env.example /opt/site-admin/config.env
-ln -s /opt/site-admin/bin/adm /usr/local/bin/adm
+curl -sSfL https://github.com/jahudka/site-admin/raw/main/install.sh | bash -s <install dir>
 ```
+
+Default installation directory is `/opt/adm`.
 
 ## Commands
 
 ### `adm create [options] <name> [aliases]`
+
+**Note:** this doc is outdated, will be fixed soon, run `adm create` for built-in help for now.
 
 This command will create a new site. Available options are:
  - `-p[v]` / `--php[=v]`: enable PHP at the specified version (8 by default).

@@ -2,5 +2,5 @@
 
 set -eu
 
-curl -sSf https://github.com/jahudka/site-admin/raw/main/install.sh \
+curl -sSfL https://github.com/jahudka/site-admin/raw/main/install.sh \
   | bash -s "${ADM_ROOT}"
