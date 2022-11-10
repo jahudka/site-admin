@@ -27,6 +27,7 @@ fi
 ADM="$0"
 ADM_ROOT="${base_dir}"
 ADM_RESOURCES="${base_dir}/resources"
+ADM_LIB="${base_dir}/lib"
 set +a
 
 "${command}" "$@"

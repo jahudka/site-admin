@@ -2,6 +2,8 @@
 
 set -eu
 
+source "${ADM_LIB}/functions.sh"
+
 function print_usage () {
   cat << EOT
 Usage: ${ADM} create [options] <name> [alias...]
@@ -12,6 +14,7 @@ Options:
  --php[=#], -p[#]         Enable PHP at version '#' (default: ${DEFAULT_PHP_VERSION}).
  --node[=#], -n[#]        Enable NodeJS at version '#' (default: ${DEFAULT_NODE_VERSION}).
  --ssl, -s                Obtain Let's Encrypt certificate for <name> and all aliases.
+ --allow-others, -o       Make home directory and its contents world-readable.
  --yes, -y                Do not ask for confirmation.
 
 The utility operates in one of two modes:
@@ -47,6 +50,7 @@ node=""
 user_name=""
 home_dir=""
 ssl=""
+others=""
 yes=""
 
 if ! temp=$( getopt --options 'p::n::u:h:say' --longoptions 'php::,node::,user:,home:,ssl,app,yes' --name "${ADM} create" -- "$@" ); then
@@ -76,6 +80,10 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     '-s'|'--ssl')
       ssl=1
+      shift
+      ;;
+    '-o'|'--allow-others')
+      others=1
       shift
       ;;
     '-a'|'--app')
@@ -130,7 +138,12 @@ if [[ -z "${home_dir}" ]]; then
   fi
 fi
 
-if [[ -n "$( getent passwd "${user_name}" )" ]]; then
+if [[ "${user_name}" == "root" ]]; then
+  if [[ -z "${app}" ]]; then
+    echo "User 'root' is only allowed in app mode"
+    exit 1
+  fi
+elif [[ -n "$( getent passwd "${user_name}" )" ]]; then
   echo "User ${user_name} already exists"
   exit 1
 fi
@@ -150,12 +163,12 @@ fi
 
 if [[ -n "${app}" ]]; then
   for alias in "${aliases_arr[@]}"; do
-    alias="$( cut -d= -f1 <<< "${alias}" )"
+  	alias="$( cut -d= -f1 <<< "${alias}" )"
 
-    if [[ -e "/usr/local/bin/${alias}" ]]; then
-      echo "Invalid alias '${alias}': file '/usr/local/bin/${alias}' exists"
-      exit 1
-    fi
+  	if [[ -e "/usr/local/bin/${alias}" ]]; then
+  		echo "Invalid alias '${alias}': file '/usr/local/bin/${alias}' exists"
+  		exit 1
+  	fi
   done
 fi
 
@@ -170,7 +183,7 @@ echo " - PHP: ${php:-none}"
 echo " - Node: ${node:-none}"
 echo " - SSL: ${ssl:-0}"
 echo " - User name: ${user_name}"
-echo " - Home directory: ${home_dir}"
+echo " - Home directory: ${home_dir} (${perms})"
 
 if [[ -z "${yes}" ]]; then
   read -rp "Proceed? [Y/n] "
@@ -181,73 +194,91 @@ if [[ -z "${yes}" ]]; then
   fi
 fi
 
-args=()
+install_opts=(-u "${user_name}" -h "${home_dir}")
+perms="g-w,o-rwx"
+mask="027"
+sudo=""
 
-if [[ -z "${app}" ]]; then
-  args+=(
-    --key SYS_UID_MIN=2000
-    --key SYS_UID_MAX=2999
-    --key SYS_GID_MIN=2000
-    --key SYS_GID_MAX=2999
-  )
+if [[ -n "${others}" ]]; then
+  install_opts+=(-o)
+  perms="go-w"
+  mask="022"
 fi
 
-useradd \
-  --system \
-  --create-home \
-  --home-dir "${home_dir}" \
-  --skel "${ADM_RESOURCES}/skel" \
-  --shell /bin/bash \
-  --user-group \
-  "${args[@]}" \
-  --key UMASK=027 \
-  --comment "${name},,,,UMASK=027" \
-  "${user_name}"
+if [[ "${user_name}" != "root" ]]; then
+  sudo="sudo -u ${user_name}"
+  args=()
 
-if [[ -z "${app}" ]]; then
-  adduser "${user_name}" www-data
-  adduser www-data "${user_name}"
+  if [[ -z "${app}" ]]; then
+    args+=(
+      --key SYS_UID_MIN=2000
+      --key SYS_UID_MAX=2999
+      --key SYS_GID_MIN=2000
+      --key SYS_GID_MAX=2999
+    )
+  fi
+
+  useradd \
+    --system \
+    --create-home \
+    --home-dir "${home_dir}" \
+    --skel "${ADM_RESOURCES}/skel" \
+    --shell /bin/bash \
+    --user-group \
+    "${args[@]}" \
+    --key UMASK=${mask} \
+    --comment "${name},,,,UMASK=${mask}" \
+    "${user_name}"
+
+  if [[ -z "${app}" ]]; then
+    adduser "${user_name}" www-data
+    adduser www-data "${user_name}"
+  fi
+else
+  mkdirp "${home_dir}" "${user_name}" "${perms}"
 fi
 
 find "${home_dir}" -type f -name '.keep' -delete
-chmod -R g-w,o-rwx "${home_dir}"
+chmod -R "${perms}" "${home_dir}"
 
-loginctl enable-linger "${user_name}"
-systemctl start "user@$( id -u "${user_name}" ).service"
+if [[ "${user_name}" != "root" ]]; then
+  loginctl enable-linger "${user_name}"
+  systemctl start "user@$( id -u "${user_name}" ).service"
 
-if [[ -n "${SSH_IMPORT:+x}" ]]; then
-  sudo -u "${user_name}" ssh-import-id "${SSH_IMPORT}"
-fi
-
-if [[ -n "${php}" ]]; then
-  ${ADM} install -u "${user_name}" -h "${home_dir}" -s "$( which "php${php}" )" .bin/php
-
-  if [[ -z "${app}" ]]; then
-    ${ADM} install -u "${user_name}" -h "${home_dir}" -s "$( which "php-fpm${php}" )" .bin/php-fpm
-    ${ADM} install -u "${user_name}" -h "${home_dir}" config/php/fpm.service .config/systemd/user/fpm.service
-    ${ADM} install -u "${user_name}" -h "${home_dir}" config/php/fpm.ini .config/php/fpm.ini
-    ${ADM} install -u "${user_name}" -h "${home_dir}" config/php/fpm.tpl.sh .config/php/fpm.conf -v name="${name}"
+  if [[ -n "${SSH_IMPORT:+x}" ]]; then
+    $sudo ssh-import-id "${SSH_IMPORT}"
   fi
 
-  sudo -u "${user_name}" mkdir -p "${home_dir}/.log/php"
+  if [[ -n "${php}" ]]; then
+    ${ADM} install "${install_opts[@]}" -s "$( which "php${php}" )" .bin/php
+
+    if [[ -z "${app}" ]]; then
+      ${ADM} install "${install_opts[@]}" -s "$( which "php-fpm${php}" )" .bin/php-fpm
+      ${ADM} install "${install_opts[@]}" config/php/fpm.service .config/systemd/user/fpm.service
+      ${ADM} install "${install_opts[@]}" config/php/fpm.ini .config/php/fpm.ini
+      ${ADM} install "${install_opts[@]}" config/php/fpm.tpl.sh .config/php/fpm.conf -v name="${name}"
+    fi
+
+    mkdirp "${home_dir}/.log/php" "${user_name}" "${perms}"
+  fi
+
+  if [[ -n "${node}" ]]; then
+    ${ADM} install "${install_opts[@]}" -s "/opt/node/${node}/bin/corepack" .bin/corepack
+    ${ADM} install "${install_opts[@]}" -s "/opt/node/${node}/bin/node" .bin/node
+    ${ADM} install "${install_opts[@]}" -s "/opt/node/${node}/bin/npm" .bin/npm
+    ${ADM} install "${install_opts[@]}" -s "/opt/node/${node}/bin/npx" .bin/npx
+  fi
 fi
 
-if [[ -n "${node}" ]]; then
-  ${ADM} install -u "${user_name}" -h "${home_dir}" -s "/opt/node/${node}/bin/corepack" .bin/corepack
-  ${ADM} install -u "${user_name}" -h "${home_dir}" -s "/opt/node/${node}/bin/node" .bin/node
-  ${ADM} install -u "${user_name}" -h "${home_dir}" -s "/opt/node/${node}/bin/npm" .bin/npm
-  ${ADM} install -u "${user_name}" -h "${home_dir}" -s "/opt/node/${node}/bin/npx" .bin/npx
-fi
-
-"${ADM}" scaffold "${home_dir}"
+"${ADM}" scaffold ${others:+-o} "${home_dir}"
 
 if [[ -n "${app}" ]]; then
-  sudo -u "${user_name}" mkdir "${home_dir}/current/bin"
+  mkdirp "${home_dir}/current/bin" "${user_name}" "${perms}"
 
   for alias in "${aliases_arr[@]}"; do
     binary="$( cut -d= -f2 <<< "${alias}" )"
     alias="$( cut -d= -f1 <<< "${alias}" )"
-    ${ADM} install -u "${user_name}" -h "${home_dir}" stub.sh "current/bin/${binary}"
+    ${ADM} install "${install_opts[@]}" stub.sh "current/bin/${binary}"
     sudo -u "${user_name}" ln -s "${home_dir}/current/bin/${binary}" "${home_dir}/.bin/${binary}"
     ln -s "${home_dir}/.bin/${binary}" "/usr/local/bin/${alias}"
   done
@@ -283,21 +314,26 @@ EOT
   fi
 fi
 
-${ADM} install -u "${user_name}" -h "${home_dir}" config/logrotate/logrotate.tpl.sh .config/logrotate.conf -v home_dir="${home_dir}"
-${ADM} install -u "${user_name}" -h "${home_dir}" config/logrotate/logrotate.service .config/systemd/user/logrotate.service
-${ADM} install -u "${user_name}" -h "${home_dir}" config/logrotate/logrotate.timer .config/systemd/user/logrotate.timer
+services=()
 
-services="logrotate.timer"
-
-if [[ -z "${app}" && -n "${php}" ]]; then
-  services="${services} fpm.service"
+if [[ "${user_name}" != "root" ]]; then
+  ${ADM} install "${install_opts[@]}" config/logrotate/logrotate.tpl.sh .config/logrotate.conf -v home_dir="${home_dir}"
+  ${ADM} install "${install_opts[@]}" config/logrotate/logrotate.service .config/systemd/user/logrotate.service
+  ${ADM} install "${install_opts[@]}" config/logrotate/logrotate.timer .config/systemd/user/logrotate.timer
+  services+=(logrotate.timer)
 fi
 
-sudo -u "${user_name}" -i << EOT
+if [[ -z "${app}" && -n "${php}" ]]; then
+  services+=(fpm.service)
+fi
+
+if [[ "${#services[@]}" -gt "0" ]]; then
+  sudo -u "${user_name}" -i << EOT
 export XDG_RUNTIME_DIR="/run/user/$( id -u "${user_name}" )"
 systemctl --user daemon-reload
-systemctl --user enable --now ${services}
+systemctl --user enable --now ${services[@]}
 EOT
+fi
 
 if [[ -z "${app}" ]]; then
   systemctl restart nginx

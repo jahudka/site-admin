@@ -2,6 +2,8 @@
 
 set -eu
 
+source "${ADM_LIB}/functions.sh"
+
 function print_usage () {
   cat << EOT
 Usage: ${ADM} install [options] <resource> [destination]
@@ -95,17 +97,7 @@ if [[ ! "${destination}" =~ ^/ ]]; then
   destination="${home}/${destination}"
 fi
 
-function mkdirp () {
-  if [[ -e "${1}" ]]; then
-    return 0
-  fi
-
-  mkdirp "$( dirname "${1}" )"
-  mkdir -m "${perms}" "${1}"
-  chown "${user}:${user}" "${1}"
-}
-
-mkdirp "$( dirname "${destination}" )"
+mkdirp "$( dirname "${destination}" )" "${user}" "${perms}"
 
 if [[ -n "${symlink}" ]]; then
   ln -s "${resource}" "${destination}"
