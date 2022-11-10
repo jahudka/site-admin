@@ -279,8 +279,13 @@ if [[ -n "${app}" ]]; then
     binary="$( cut -d= -f2 <<< "${alias}" )"
     alias="$( cut -d= -f1 <<< "${alias}" )"
     ${ADM} install "${install_opts[@]}" stub.sh "current/bin/${binary}"
-    sudo -u "${user_name}" ln -s "${home_dir}/current/bin/${binary}" "${home_dir}/.bin/${binary}"
-    ln -s "${home_dir}/.bin/${binary}" "/usr/local/bin/${alias}"
+
+    if [[ "${user_name}" == "root" ]]; then
+      ln -s "${home_dir}/current/bin/${binary}" "/usr/local/bin/${alias}"
+    else
+      sudo -u "${user_name}" ln -s "${home_dir}/current/bin/${binary}" "${home_dir}/.bin/${alias}"
+      ln -s "${home_dir}/.bin/${alias}" "/usr/local/bin/${alias}"
+    fi
   done
 else
   sudo -u "${user_name}" -i << EOT
