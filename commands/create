@@ -183,7 +183,7 @@ echo " - PHP: ${php:-none}"
 echo " - Node: ${node:-none}"
 echo " - SSL: ${ssl:-0}"
 echo " - User name: ${user_name}"
-echo " - Home directory: ${home_dir} (${perms})"
+echo " - Home directory: ${home_dir} ${others:+(o+rX)}"
 
 if [[ -z "${yes}" ]]; then
   read -rp "Proceed? [Y/n] "
