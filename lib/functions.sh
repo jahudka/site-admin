@@ -11,11 +11,14 @@ function mkdirp () {
 	local -r user="${2}"
 	local -r perms="${3}"
 
-  if [[ -e "${path}" ]]; then
+  if [[ -d "${path}" ]]; then
     return 0
+	elif [[ -e "${path}" ]]; then
+		echo "Failed to create '${path}': file already exists and is not a directory"
+		return 1
   fi
 
-  mkdirp "$( dirname "${path}" )"
+  mkdirp "$( dirname "${path}" )" "${user}" "${perms}"
   mkdir -m "${perms}" "${path}"
   chown "${user}:${user}" "${path}"
 }
