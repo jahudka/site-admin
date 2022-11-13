@@ -288,9 +288,12 @@ if [[ -n "${app}" ]]; then
     fi
   done
 else
+  suffix="html"
+  if [[ -n "${php}" ]]; then suffix="php"; fi
+
   sudo -u "${user_name}" -i << EOT
 mkdir "${home_dir}/current/public"
-echo 'It works!' > "${home_dir}/current/public/index.html"
+echo 'It works!' > "${home_dir}/current/public/index.${suffix}"
 
 mkdir -p "${home_dir}/.log/nginx"
 ln -s "/var/log/nginx/access.${name#www.}.log" "${home_dir}/.log/nginx/access"
