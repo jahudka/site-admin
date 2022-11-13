@@ -341,6 +341,12 @@ EOT
 fi
 
 if [[ -z "${app}" ]]; then
+  if [[ -n "$( command -v fail2ban-client )" && -n "${php}" || -n "${node}" ]]; then
+    sudo -u "${user_name}" mkdir "${home_dir}/.log/app"
+    sudo -u "${user_name}" touch "${home_dir}/.log/app/auth.log"
+    fail2ban-client reload website
+  fi
+
   systemctl restart nginx
 
   echo "Testing site..."
