@@ -1,6 +1,5 @@
 [Unit]
-Description=PHP 8.0 FPM pool %u
-Documentation=man:php-fpm8.0(8)
+Description=PHP FPM pool %u
 
 [Service]
 Type=notify

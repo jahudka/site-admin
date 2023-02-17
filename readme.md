@@ -25,7 +25,7 @@ Default installation directory is `/opt/adm`.
 **Note:** this doc is outdated, will be fixed soon, run `adm create` for built-in help for now.
 
 This command will create a new site. Available options are:
- - `-p[v]` / `--php[=v]`: enable PHP at the specified version (8 by default).
+ - `-p[v]` / `--php[=v]`: enable PHP at the specified version (8.1 by default).
  - `-n[v]` / `--node[=v]`: enable NodeJS at the specified version (18 by default).
  - `-s` / `--ssl`: enable SSL and obtain certificates via Certbot.
 
