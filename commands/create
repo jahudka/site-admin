@@ -304,22 +304,6 @@ EOT
     -v name="${name}" -v home_dir="${home_dir}" -v aliases="${aliases}" \
     -v php="${php}" -v node="${node}" -v ssl="${ssl}"
   ln -s "../sites-available/${name#www.}.conf" "/etc/nginx/sites-enabled/${name#www.}"
-
-  if [[ -n "${ssl}" ]]; then
-    certbot_domains=('-d' "${name}")
-
-    for alias in "${aliases_arr[@]}"; do
-      certbot_domains+=('-d' "${alias}")
-    done
-
-    certbot \
-      certonly \
-      --agree-tos \
-      --non-interactive \
-      --authenticator "${CERTBOT_AUTHENTICATOR}" \
-      --post-hook '/bin/systemctl reload nginx' \
-      "${certbot_domains[@]}"
-  fi
 fi
 
 services=()
@@ -344,10 +328,31 @@ EOT
 fi
 
 if [[ -z "${app}" ]]; then
-  if [[ -n "$( command -v fail2ban-client )" && -n "${php}" || -n "${node}" ]]; then
+  if [[ -n "$( command -v fail2ban-client )" && ( -n "${php}" || -n "${node}" )]]; then
     sudo -u "${user_name}" mkdir "${home_dir}/.log/app"
     sudo -u "${user_name}" touch "${home_dir}/.log/app/auth.log"
     fail2ban-client reload >/dev/null 2>&1 || true
+  fi
+
+  if [[ -n "${ssl}" ]]; then
+    echo ""
+    echo "Attempting to obtain a certificate from Let's Encrypt."
+    echo "If this fails, don't fret - everything else is ready, just the certificate is missing."
+    echo ""
+
+    certbot_domains=('-d' "${name}")
+
+    for alias in "${aliases_arr[@]}"; do
+      certbot_domains+=('-d' "${alias}")
+    done
+
+    certbot \
+      certonly \
+      --agree-tos \
+      --non-interactive \
+      --authenticator "${CERTBOT_AUTHENTICATOR}" \
+      --post-hook '/bin/systemctl reload nginx' \
+      "${certbot_domains[@]}"
   fi
 
   systemctl restart nginx
