@@ -31,4 +31,6 @@ pm.start_servers = 1
 pm.min_spare_servers = 1
 pm.max_spare_servers = 3
 
+env[PATH] = $PATH
+
 EOT
