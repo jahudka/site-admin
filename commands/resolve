@@ -39,7 +39,7 @@ version="$( ere "${version}" )"
 readarray -t versions < <(
   find "${base}" -mindepth 1 -maxdepth 1 -regextype egrep \
     -regex ".+/${prefix:-v?}${version:-[0-9]+}(\.[0-9]+)*" \
-    | sed -Ee "s~^.+/${prefix:-v?}~~g" \
+    | sed -Ee "s~^.+/~~g" \
     | sort -Vr
 )
 
