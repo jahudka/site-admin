@@ -16,10 +16,10 @@ Options:
                             by all users.
 
 Creates a conventional versioned app structure:
- - <base>/releases              Directory which contains releases.
- - <base>/releases/000-initial  Initial empty release.
- - <base>/current               Symlink to releases/000-initial.
- - <base>/shared                Directory for shared data.
+ - <base>/releases          Directory which contains releases.
+ - <base>/releases/000      Initial empty release.
+ - <base>/current           Symlink to releases/000-initial.
+ - <base>/shared            Directory for shared data.
 EOT
   exit 1
 }
@@ -81,15 +81,15 @@ fi
 
 mkdir -m "${perms}" \
   "${base}/releases" \
-  "${base}/releases/000-initial" \
+  "${base}/releases/000" \
   "${base}/shared"
 
-ln -s "${base}/releases/000-initial" "${base}/current"
+ln -s "${base}/releases/000" "${base}/current"
 
 if [[ -n "${user}" ]]; then
   chown -h "${user}:${user}" \
     "${base}/releases" \
-    "${base}/releases/000-initial" \
+    "${base}/releases/000" \
     "${base}/shared" \
     "${base}/current"
 fi
