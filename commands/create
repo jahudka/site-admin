@@ -256,7 +256,7 @@ if [[ "${user_name}" != "root" ]]; then
       ${ADM} install "${install_opts[@]}" -s "$( which "php-fpm${php}" )" .bin/php-fpm
       ${ADM} install "${install_opts[@]}" config/php/fpm.service .config/systemd/user/fpm.service
       ${ADM} install "${install_opts[@]}" config/php/fpm.ini .config/php/fpm.ini
-      ${ADM} install "${install_opts[@]}" config/php/fpm.tpl.sh .config/php/fpm.conf -v name="${name}"
+      ${ADM} install "${install_opts[@]}" config/php/fpm.tpl.sh .config/php/fpm.conf -v name="${name}" -v home_dir="${home_dir}"
     fi
 
     mkdirp "${home_dir}/.log/php" "${user_name}" "${perms}"

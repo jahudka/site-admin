@@ -31,6 +31,6 @@ pm.start_servers = 1
 pm.min_spare_servers = 1
 pm.max_spare_servers = 3
 
-env[PATH] = $PATH
+env[PATH] = ${home_dir}/.bin:/opt/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 EOT
